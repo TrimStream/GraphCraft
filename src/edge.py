@@ -16,11 +16,10 @@ class Edge(QGraphicsPathItem):
 
     def update_position(self):
         path = QPainterPath()
-        # Calculate the scene position by adding the vertex's position and its local center.
         center1 = self.vertex1.pos() + self.vertex1.get_center()
         center2 = self.vertex2.pos() + self.vertex2.get_center()
         if self.vertex1 is self.vertex2:
-            # For a loop, draw an ellipse offset from the vertex.
+            # Draw a loop: an ellipse offset from the vertex.
             offset = self.vertex1.radius
             x = center1.x() + offset
             y = center1.y() - offset
