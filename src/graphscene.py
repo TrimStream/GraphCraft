@@ -25,25 +25,35 @@ class GraphScene(QGraphicsScene):
         return edge
 
     def mousePressEvent(self, event):
-        # Left-click only.
+        # Only respond to left mouse clicks.
         if event.button() == Qt.LeftButton:
             clicked_items = self.items(event.scenePos())
             vertex_clicked = None
+            edge_clicked = None
+            # Look for a vertex first.
             for item in clicked_items:
-                if hasattr(item, 'get_center'):
+                if isinstance(item, Vertex):
                     vertex_clicked = item
                     break
+                # If it's not a Vertex, check if it's an Edge.
+                elif hasattr(item, 'update_position'):  # Edge objects have update_position
+                    edge_clicked = item
+
             if vertex_clicked:
                 if self.edge_source is None:
-                    # First vertex becomes source.
+                    # First vertex becomes the source.
                     self.edge_source = vertex_clicked
                     vertex_clicked.setSelected(True)
                 else:
                     # Second vertex clicked completes the edge.
                     self.add_edge(self.edge_source, vertex_clicked)
                     self.edge_source = None
+            elif edge_clicked:
+                # An edge was clicked. Allow default processing (i.e. selection)
+                # and do not spawn a new vertex.
+                pass
             else:
-                # Clicked on empty space → add a vertex.
+                # Nothing was clicked: create a new vertex.
                 self.edge_source = None
                 self.add_vertex(event.scenePos().x(), event.scenePos().y())
         super().mousePressEvent(event)
