@@ -10,7 +10,7 @@ class GraphScene(QGraphicsScene):
         super().__init__(parent)
         self.vertices = []
         self.edges = []
-        self.edge_source = None  # For storing the source vertex when creating an edge
+        self.edge_source = None  # Stores the source vertex for edge creation
 
     def add_vertex(self, x, y):
         vertex = Vertex(x, y)
@@ -18,15 +18,14 @@ class GraphScene(QGraphicsScene):
         self.vertices.append(vertex)
         return vertex
 
-    def add_edge(self, vertex1, vertex2):
-        # Create an edge (allowing loops and parallel edges).
-        edge = Edge(vertex1, vertex2)
+    def add_edge(self, vertex1, vertex2, directed=False):
+        edge = Edge(vertex1, vertex2, directed)
         self.addItem(edge)
         self.edges.append(edge)
         return edge
 
     def mousePressEvent(self, event):
-        # Only respond to left mouse clicks.
+        # Left-click only.
         if event.button() == Qt.LeftButton:
             clicked_items = self.items(event.scenePos())
             vertex_clicked = None
@@ -36,7 +35,7 @@ class GraphScene(QGraphicsScene):
                     break
             if vertex_clicked:
                 if self.edge_source is None:
-                    # First vertex clicked becomes the source.
+                    # First vertex becomes source.
                     self.edge_source = vertex_clicked
                     vertex_clicked.setSelected(True)
                 else:
@@ -44,18 +43,18 @@ class GraphScene(QGraphicsScene):
                     self.add_edge(self.edge_source, vertex_clicked)
                     self.edge_source = None
             else:
-                # If no vertex was clicked, create a new vertex.
+                # Clicked on empty space → add a vertex.
                 self.edge_source = None
                 self.add_vertex(event.scenePos().x(), event.scenePos().y())
         super().mousePressEvent(event)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Delete:
-            selected_items = self.selectedItems()
-            for item in selected_items:
+            for item in self.selectedItems():
                 if hasattr(item, 'get_center'):
-                    # Remove edges connected to this vertex.
-                    edges_to_remove = [edge for edge in self.edges if edge.vertex1 == item or edge.vertex2 == item]
+                    # Delete vertex and its connected edges.
+                    edges_to_remove = [edge for edge in self.edges
+                                       if edge.vertex1 == item or edge.vertex2 == item]
                     for edge in edges_to_remove:
                         self.removeItem(edge)
                         if edge in self.edges:
@@ -71,26 +70,25 @@ class GraphScene(QGraphicsScene):
             super().keyPressEvent(event)
 
     def update_edges(self):
-        # Update positions for all edges.
         for edge in self.edges:
             edge.update_position()
 
     def update_physics(self, dt):
         """
-        Update vertex positions via a force-directed layout:
-         - Each vertex repels every other vertex: force ~ constant / distance.
-         - Each edge acts like a spring: force ~ constant * (d - rest_length).
+        Force-directed simulation:
+         - Vertices repel each other with a 1/d force.
+         - Edges act as springs with force proportional to (d - rest_length).
         """
-        rest_length = 100.0          # Desired edge length
-        k_repulsion = 10000.0        # Constant for repulsive force; try adjusting if too strong/weak.
-        k_attraction = 0.5           # Spring (attractive) constant for edges.
-        damping = 0.9                # Damping factor to smooth motion
+        rest_length = 100.0
+        k_repulsion = 10000.0
+        k_attraction = 0.5
+        damping = 0.9
 
-        # Reset forces for all vertices.
+        # Reset forces.
         for v in self.vertices:
             v.force = QPointF(0, 0)
 
-        # Compute repulsive forces between each pair of vertices.
+        # Repulsive forces.
         n = len(self.vertices)
         for i in range(n):
             for j in range(i + 1, n):
@@ -101,13 +99,17 @@ class GraphScene(QGraphicsScene):
                 delta = pos1 - pos2
                 d = math.hypot(delta.x(), delta.y())
                 if d < 1:
-                    d = 1  # Avoid division by zero
-                # Repulsive force magnitude decreases as 1/d.
-                rep_force = (k_repulsion / d) * (delta / d)
-                v1.force = v1.force + rep_force
-                v2.force = v2.force - rep_force
+                    d = 1
+                # Force magnitude ~ 1/d.
+                rep = k_repulsion / d
+                # Normalize delta.
+                nx_val = delta.x() / d
+                ny_val = delta.y() / d
+                force = QPointF(rep * nx_val, rep * ny_val)
+                v1.force = v1.force + force
+                v2.force = v2.force - force
 
-        # Compute attractive (spring) forces along edges.
+        # Attractive (spring) forces along edges.
         for edge in self.edges:
             v1 = edge.vertex1
             v2 = edge.vertex2
@@ -117,14 +119,18 @@ class GraphScene(QGraphicsScene):
             d = math.hypot(delta.x(), delta.y())
             if d < 1:
                 d = 1
-            # Attractive force tries to bring d closer to rest_length.
-            attr_force = k_attraction * (d - rest_length) * (delta / d)
-            v1.force = v1.force - attr_force
-            v2.force = v2.force + attr_force
+            # Hooke's law: F = -k*(d - rest_length)
+            attr = k_attraction * (d - rest_length)
+            nx_val = delta.x() / d
+            ny_val = delta.y() / d
+            force = QPointF(attr * nx_val, attr * ny_val)
+            # Attractive forces pull vertices together.
+            v1.force = v1.force - force
+            v2.force = v2.force + force
 
-        # Update vertices' velocities and positions.
+        # Update vertex velocities and positions.
         for v in self.vertices:
-            acceleration = v.force  # Assuming mass = 1.
+            acceleration = v.force  # mass = 1
             v.velocity = (v.velocity + acceleration * dt) * damping
             new_pos = v.pos() + v.velocity * dt
             v.setPos(new_pos)
