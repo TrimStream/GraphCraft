@@ -1,3 +1,4 @@
+# graph_analysis.py
 import networkx as nx
 import numpy as np
 
@@ -21,39 +22,32 @@ def get_graph_info(scene):
         info['num_arcs'] = G.number_of_edges()
         info['directed_edges'] = list(G.edges())
 
-    # Degrees
     if info['is_directed']:
         info['degrees'] = {
-            n: {'in':G.in_degree(n), 'out':G.out_degree(n)}
+            n:{'in':G.in_degree(n),'out':G.out_degree(n)}
             for n in G.nodes()
         }
     else:
         info['degrees'] = {n:G.degree(n) for n in G.nodes()}
 
-    # Components
     if info['is_directed']:
         info['strongly_connected_components'] = list(nx.strongly_connected_components(G))
         info['components'] = list(nx.weakly_connected_components(G))
     else:
         info['components'] = list(nx.connected_components(G))
 
-    # Bridges
     simple = nx.Graph(G)
     info['bridges'] = list(nx.bridges(simple))
 
-    # Bipartite
     info['is_bipartite'] = nx.is_bipartite(G)
 
-    # Matrices
     info['adjacency_matrix'] = nx.adjacency_matrix(G).todense()
     info['laplacian_matrix'] = nx.laplacian_matrix(G).todense()
 
-    # Spectral
     ev, evecs = np.linalg.eig(info['laplacian_matrix'])
     info['eigenvalues']  = ev
     info['eigenvectors'] = evecs
 
-    # Chromatic (heuristic)
     if not info['is_directed']:
         cm = nx.coloring.greedy_color(G, strategy='largest_first')
         info['chromatic_number'] = len(set(cm.values()))
@@ -72,8 +66,8 @@ def format_info(info):
         L.append(f"Directed Edges: {info['directed_edges']}")
     L.append("Degrees:")
     if info['is_directed']:
-        for n,deg in info['degrees'].items():
-            L.append(f"  Vertex {n}: in={deg['in']}, out={deg['out']}")
+        for n,d in info['degrees'].items():
+            L.append(f"  Vertex {n}: in={d['in']}, out={d['out']}")
     else:
         for n,d in info['degrees'].items():
             L.append(f"  Vertex {n}: {d}")
@@ -84,8 +78,11 @@ def format_info(info):
     L.append(f"Bipartite: {info['is_bipartite']}")
     if info.get('chromatic_number') is not None:
         L.append(f"Chromatic Number (heuristic): {info['chromatic_number']}")
-    A = info['adjacency_matrix']; L.append(f"Adjacency shape: {A.shape}")
-    M = info['laplacian_matrix']; L.append(f"Laplacian shape: {M.shape}")
-    ev = info['eigenvalues']; pr = ev[:min(10,len(ev))]
+    A = info['adjacency_matrix']
+    L.append(f"Adjacency shape: {A.shape}")
+    M = info['laplacian_matrix']
+    L.append(f"Laplacian shape: {M.shape}")
+    ev = info['eigenvalues']
+    pr = ev[:min(10,len(ev))]
     L.append(f"Eigenvalues (first {len(pr)} of {len(ev)}): {np.round(pr,4).tolist()}")
     return "\n".join(L)

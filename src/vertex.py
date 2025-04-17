@@ -1,3 +1,4 @@
+# vertex.py
 from PyQt5.QtWidgets import (
     QGraphicsEllipseItem, QGraphicsTextItem, QGraphicsDropShadowEffect
 )
@@ -12,9 +13,8 @@ class Vertex(QGraphicsEllipseItem):
         grad = QRadialGradient(radius, radius, radius)
         grad.setColorAt(0, QColor("#add8e6"))
         grad.setColorAt(1, QColor("#0000ff"))
-        brush = QBrush(grad)
-        self.setBrush(brush)
-        self.original_brush = brush
+        self.original_brush = QBrush(grad)
+        self.setBrush(self.original_brush)
 
         self.setFlags(
             QGraphicsEllipseItem.ItemIsMovable |

@@ -1,3 +1,4 @@
+# edge.py
 from PyQt5.QtWidgets import QGraphicsPathItem
 from PyQt5.QtGui import QPainterPath, QPen, QColor, QPolygonF
 from PyQt5.QtCore import QPointF, Qt
@@ -17,8 +18,8 @@ class Edge(QGraphicsPathItem):
 
     def update_position(self):
         path = QPainterPath()
-        c1 = self.vertex1.pos()+self.vertex1.get_center()
-        c2 = self.vertex2.pos()+self.vertex2.get_center()
+        c1 = self.vertex1.pos() + self.vertex1.get_center()
+        c2 = self.vertex2.pos() + self.vertex2.get_center()
         if self.vertex1 is self.vertex2:
             off = self.vertex1.radius
             path.addEllipse(c1.x()+off, c1.y()-off,
@@ -30,14 +31,13 @@ class Edge(QGraphicsPathItem):
                 self._add_arrow(path, c1, c2)
         self.setPath(path)
 
-    def _add_arrow(self, path, start, end):
-        vec = end - start
-        angle = math.atan2(vec.y(), vec.x())
+    def _add_arrow(self, path, s, e):
+        vec = e - s
+        ang = math.atan2(vec.y(), vec.x())
         sz = 10
-        p1 = end
-        p2 = end - QPointF(sz*math.cos(angle-math.pi/6),
-                          sz*math.sin(angle-math.pi/6))
-        p3 = end - QPointF(sz*math.cos(angle+math.pi/6),
-                          sz*math.sin(angle+math.pi/6))
-        tri = QPolygonF([p1,p2,p3])
-        path.addPolygon(tri)
+        p1 = e
+        p2 = e - QPointF(sz*math.cos(ang-math.pi/6),
+                        sz*math.sin(ang-math.pi/6))
+        p3 = e - QPointF(sz*math.cos(ang+math.pi/6),
+                        sz*math.sin(ang+math.pi/6))
+        path.addPolygon(QPolygonF([p1,p2,p3]))
