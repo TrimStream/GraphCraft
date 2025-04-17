@@ -1,12 +1,13 @@
-# main.py
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QGraphicsView, QToolBar, QAction,
     QLabel, QDialog, QVBoxLayout, QTextEdit, QMessageBox
 )
-from PyQt5.QtCore import QTimer, QEvent
+from PyQt5.QtCore import QTimer, QEvent, QPointF, Qt
 from PyQt5.QtGui import QPainter, QFont
 from graphscene import GraphScene
+from vertex import Vertex
+from edge import Edge
 import graph_analysis as ga
 
 class GraphWindow(QMainWindow):
@@ -29,6 +30,22 @@ class GraphWindow(QMainWindow):
         toolbar = QToolBar("Main Toolbar")
         toolbar.setStyleSheet("background-color: #444444; color: white;")
         self.addToolBar(toolbar)
+
+        delete_vertex_act = QAction("Delete Vertex", self)
+        delete_vertex_act.triggered.connect(self.delete_vertex)
+        toolbar.addAction(delete_vertex_act)
+
+        delete_edge_act = QAction("Delete Edge", self)
+        delete_edge_act.triggered.connect(self.delete_edge)
+        toolbar.addAction(delete_edge_act)
+
+        cart_prod_act = QAction("Cartesian Product", self)
+        cart_prod_act.triggered.connect(self.cartesian_product)
+        toolbar.addAction(cart_prod_act)
+
+        chrom_poly_act = QAction("Chromatic Polynomial", self)
+        chrom_poly_act.triggered.connect(self.show_chromatic_polynomial)
+        toolbar.addAction(chrom_poly_act)
 
         # Directed‐mode toggle
         self.directed_mode = False
@@ -82,6 +99,35 @@ class GraphWindow(QMainWindow):
     def _status_text(self):
         return f"Vertices: {len(self.scene.vertices)} | Edges: {len(self.scene.edges)}"
 
+    def delete_vertex(self):
+        sel = self.scene.selectedItems()
+        for item in sel:
+            if isinstance(item, Vertex):
+                # remove connected edges
+                for e in [edge for edge in self.scene.edges
+                          if edge.vertex1 is item or edge.vertex2 is item]:
+                    self.scene.removeItem(e)
+                    self.scene.edges.remove(e)
+                self.scene.removeItem(item)
+                self.scene.vertices.remove(item)
+        self.statusBar().showMessage(self._status_text())
+
+    def delete_edge(self):
+        sel = self.scene.selectedItems()
+        for item in sel:
+            if isinstance(item, Edge):
+                self.scene.removeItem(item)
+                self.scene.edges.remove(item)
+        self.statusBar().showMessage(self._status_text())
+
+    def cartesian_product(self):
+        self.scene.cartesian_product()
+        self.statusBar().showMessage(self._status_text())
+
+    def show_chromatic_polynomial(self):
+        poly = self.scene.chromatic_polynomial()
+        QMessageBox.information(self, "Chromatic Polynomial", str(poly))
+
     def toggle_directed_mode(self):
         self.directed_mode = not self.directed_mode
         self.dir_label.setText(f"Directed: {'ON' if self.directed_mode else 'OFF'}")
@@ -126,22 +172,16 @@ class GraphWindow(QMainWindow):
         self.statusBar().showMessage(self._status_text())
 
     def analyze_graph(self):
-        """
-        Gather graph analysis and display in a scrollable dialog.
-        """
         info = ga.get_graph_info(self.scene)
         text = ga.format_info(info)
-
         dlg = QDialog(self)
         dlg.setWindowTitle("Graph Analysis")
         dlg.resize(600, 400)
-
         layout = QVBoxLayout(dlg)
         text_edit = QTextEdit(dlg)
         text_edit.setReadOnly(True)
         text_edit.setPlainText(text)
         layout.addWidget(text_edit)
-
         dlg.exec_()
 
     def eventFilter(self, source, event):

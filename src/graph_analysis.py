@@ -1,4 +1,3 @@
-# graph_analysis.py
 import networkx as nx
 import numpy as np
 
@@ -87,7 +86,6 @@ def format_info(info):
         L.append(f"Chromatic Number (heuristic): {info['chromatic_number']}")
     A = info['adjacency_matrix']; L.append(f"Adjacency shape: {A.shape}")
     M = info['laplacian_matrix']; L.append(f"Laplacian shape: {M.shape}")
-    ev = info['eigenvalues']; pr=ev[:min(10,len(ev))]; L.append(
-        f"Eigenvalues (first {len(pr)} of {len(ev)}): {np.round(pr,4).tolist()}"
-    )
+    ev = info['eigenvalues']; pr = ev[:min(10,len(ev))]
+    L.append(f"Eigenvalues (first {len(pr)} of {len(ev)}): {np.round(pr,4).tolist()}")
     return "\n".join(L)

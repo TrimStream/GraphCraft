@@ -1,7 +1,6 @@
-# edge.py
 from PyQt5.QtWidgets import QGraphicsPathItem
 from PyQt5.QtGui import QPainterPath, QPen, QColor, QPolygonF
-from PyQt5.QtCore import Qt, QPointF
+from PyQt5.QtCore import QPointF, Qt
 import math
 
 class Edge(QGraphicsPathItem):
@@ -25,13 +24,14 @@ class Edge(QGraphicsPathItem):
             path.addEllipse(c1.x()+off, c1.y()-off,
                             self.vertex1.radius, self.vertex1.radius)
         else:
-            path.moveTo(c1); path.lineTo(c2)
+            path.moveTo(c1)
+            path.lineTo(c2)
             if self.directed:
                 self._add_arrow(path, c1, c2)
         self.setPath(path)
 
     def _add_arrow(self, path, start, end):
-        vec = end-start
+        vec = end - start
         angle = math.atan2(vec.y(), vec.x())
         sz = 10
         p1 = end

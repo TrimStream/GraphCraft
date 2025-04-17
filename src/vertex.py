@@ -1,8 +1,7 @@
-# vertex.py
 from PyQt5.QtWidgets import (
     QGraphicsEllipseItem, QGraphicsTextItem, QGraphicsDropShadowEffect
 )
-from PyQt5.QtCore import QPointF, Qt
+from PyQt5.QtCore import QPointF
 from PyQt5.QtGui import QBrush, QRadialGradient, QColor
 
 class Vertex(QGraphicsEllipseItem):
