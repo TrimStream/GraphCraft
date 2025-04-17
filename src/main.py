@@ -126,16 +126,22 @@ class GraphWindow(QMainWindow):
         self.statusBar().showMessage(self._status_text())
 
     def analyze_graph(self):
+        """
+        Gather graph analysis and display in a scrollable dialog.
+        """
         info = ga.get_graph_info(self.scene)
         text = ga.format_info(info)
+
         dlg = QDialog(self)
         dlg.setWindowTitle("Graph Analysis")
         dlg.resize(600, 400)
+
         layout = QVBoxLayout(dlg)
-        te = QTextEdit(dlg)
-        te.setReadOnly(True)
-        te.setPlainText(text)
-        layout.addWidget(te)
+        text_edit = QTextEdit(dlg)
+        text_edit.setReadOnly(True)
+        text_edit.setPlainText(text)
+        layout.addWidget(text_edit)
+
         dlg.exec_()
 
     def eventFilter(self, source, event):
