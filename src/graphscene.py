@@ -184,14 +184,38 @@ class GraphScene(QGraphicsScene):
             v.reset_color()
 
     def color_by_bipartite(self):
-        info = ga.get_graph_info(self)
-        if not info['is_bipartite']:
-            return False
-        G = ga.build_graph(self)
-        cmap = nx.bipartite.color(G)
-        for v in self.vertices:
-            c = QColor('#aaffc3') if cmap[id(v)] == 0 else QColor('#ffd8b1')
-            v.set_color(c)
+        """
+        Test bipartiteness and color each side if bipartite.
+        Returns True if bipartite (and colors applied), False otherwise.
+        """
+        # Build adjacency list
+        adj = {v: [] for v in self.vertices}
+        for e in self.edges:
+            adj[e.vertex1].append(e.vertex2)
+            adj[e.vertex2].append(e.vertex1)
+
+        color = {}  # Vertex -> 0 or 1
+
+        # Try to two‑color each connected component
+        for start in self.vertices:
+            if start in color:
+                continue
+            # BFS from start
+            queue = [start]
+            color[start] = 0
+            while queue:
+                u = queue.pop(0)
+                for nbr in adj[u]:
+                    if nbr not in color:
+                        color[nbr] = 1 - color[u]
+                        queue.append(nbr)
+                    elif color[nbr] == color[u]:
+                        # Found odd‑cycle → not bipartite
+                        return False
+
+        # If we get here, it’s bipartite. Apply colors.
+        for v, side in color.items():
+            v.set_color(QColor('#aaffc3') if side == 0 else QColor('#ffd8b1'))
         return True
 
     def cartesian_product(self):
