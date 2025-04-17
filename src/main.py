@@ -1,89 +1,154 @@
 # main.py
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QGraphicsView, QToolBar, QAction, QLabel, QMessageBox
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QGraphicsView, QToolBar, QAction,
+    QLabel, QDialog, QVBoxLayout, QTextEdit, QMessageBox
+)
 from PyQt5.QtCore import QTimer, QEvent
 from PyQt5.QtGui import QPainter, QFont
 from graphscene import GraphScene
 import graph_analysis as ga
-
 
 class GraphWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("GraphCraft")
 
-        # Create scene and view.
+        # Scene + View
         self.scene = GraphScene()
         self.view = QGraphicsView(self.scene)
         self.setCentralWidget(self.view)
-
-        # Enable anti-aliasing.
         self.view.setRenderHint(QPainter.Antialiasing)
         self.setStyleSheet("background-color: #333333;")
         self.view.setStyleSheet("background-color: #222222; border: none;")
 
-        # Create a toolbar.
+        # Status bar
+        self.statusBar().showMessage(self._status_text())
+
+        # Toolbar
         toolbar = QToolBar("Main Toolbar")
         toolbar.setStyleSheet("background-color: #444444; color: white;")
         self.addToolBar(toolbar)
 
-        # Physics state label.
+        # Directed‐mode toggle
+        self.directed_mode = False
+        self.dir_label = QLabel("Directed: OFF")
+        self.dir_label.setStyleSheet("color: white; margin-right:8px;")
+        toolbar.addWidget(self.dir_label)
+        dir_act = QAction("Toggle Directed", self)
+        dir_act.triggered.connect(self.toggle_directed_mode)
+        toolbar.addAction(dir_act)
+
+        # Physics toggle
         self.physics_enabled = True
         self.physics_label = QLabel("Physics: ON")
-        self.physics_label.setStyleSheet("color: white; font-weight: bold; margin-right: 10px;")
-        self.physics_label.setFont(QFont("Arial", 12))
+        self.physics_label.setStyleSheet("color: white; margin-right:8px;")
         toolbar.addWidget(self.physics_label)
+        phys_act = QAction("Toggle Physics", self)
+        phys_act.triggered.connect(self.toggle_physics)
+        toolbar.addAction(phys_act)
 
-        # Toggle physics action.
-        physics_action = QAction("Toggle Physics", self)
-        physics_action.triggered.connect(self.toggle_physics)
-        toolbar.addAction(physics_action)
+        # Show degrees
+        self.deg_act = QAction("Show Degrees", self, checkable=True)
+        self.deg_act.triggered.connect(self.toggle_degrees)
+        toolbar.addAction(self.deg_act)
 
-        # Graph analysis action.
-        analysis_action = QAction("Analyze Graph", self)
-        analysis_action.triggered.connect(self.analyze_graph)
-        toolbar.addAction(analysis_action)
+        # Highlight bridges
+        self.bridge_act = QAction("Highlight Bridges", self, checkable=True)
+        self.bridge_act.triggered.connect(self.toggle_bridges)
+        toolbar.addAction(self.bridge_act)
 
-        # Timer for simulation updates.
+        # Show components
+        self.comp_act = QAction("Show Components", self, checkable=True)
+        self.comp_act.triggered.connect(self.toggle_components)
+        toolbar.addAction(self.comp_act)
+
+        # Show bipartite
+        self.bip_act = QAction("Show Bipartite", self, checkable=True)
+        self.bip_act.triggered.connect(self.toggle_bipartite)
+        toolbar.addAction(self.bip_act)
+
+        # Analyze graph
+        ana_act = QAction("Analyze Graph", self)
+        ana_act.triggered.connect(self.analyze_graph)
+        toolbar.addAction(ana_act)
+
+        # Timer
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_simulation)
-        self.timer.start(30)  # 30 ms interval ~33 FPS
+        self.timer.start(30)
         self.scene.installEventFilter(self)
+
+    def _status_text(self):
+        return f"Vertices: {len(self.scene.vertices)} | Edges: {len(self.scene.edges)}"
+
+    def toggle_directed_mode(self):
+        self.directed_mode = not self.directed_mode
+        self.dir_label.setText(f"Directed: {'ON' if self.directed_mode else 'OFF'}")
+        self.scene.directed_mode = self.directed_mode
 
     def toggle_physics(self):
         self.physics_enabled = not self.physics_enabled
-        self.physics_label.setText("Physics: ON" if self.physics_enabled else "Physics: OFF")
-        print("Physics enabled:", self.physics_enabled)
+        self.physics_label.setText(f"Physics: {'ON' if self.physics_enabled else 'OFF'}")
+
+    def toggle_degrees(self, checked):
+        if checked:
+            self.scene.label_degrees()
+        else:
+            self.scene.clear_labels()
+
+    def toggle_bridges(self, checked):
+        if checked:
+            self.scene.highlight_bridges()
+        else:
+            self.scene.clear_edge_highlights()
+
+    def toggle_components(self, checked):
+        if checked:
+            self.scene.color_by_component()
+        else:
+            self.scene.reset_vertex_colors()
+
+    def toggle_bipartite(self, checked):
+        if checked:
+            ok = self.scene.color_by_bipartite()
+            if not ok:
+                QMessageBox.information(self, "Bipartite", "Graph is not bipartite.")
+                self.bip_act.setChecked(False)
+        else:
+            self.scene.reset_vertex_colors()
 
     def update_simulation(self):
-        dt = 0.03  # time step (s)
+        dt = 0.03
         if self.physics_enabled:
             self.scene.update_physics(dt)
         self.scene.update_edges()
+        self.statusBar().showMessage(self._status_text())
 
     def analyze_graph(self):
         info = ga.get_graph_info(self.scene)
         text = ga.format_info(info)
-        # Display analysis info in a message box.
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Graph Analysis")
-        msg.setText(text)
-        msg.setStyleSheet("QLabel{min-width: 500px;}")
-        msg.exec_()
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Graph Analysis")
+        dlg.resize(600, 400)
+        layout = QVBoxLayout(dlg)
+        te = QTextEdit(dlg)
+        te.setReadOnly(True)
+        te.setPlainText(text)
+        layout.addWidget(te)
+        dlg.exec_()
 
     def eventFilter(self, source, event):
         if event.type() in (QEvent.GraphicsSceneMouseMove, QEvent.GraphicsSceneMouseRelease):
             self.scene.update_edges()
         return super().eventFilter(source, event)
 
-
 def main():
     app = QApplication(sys.argv)
-    window = GraphWindow()
-    window.resize(1000, 800)
-    window.show()
+    win = GraphWindow()
+    win.resize(1000, 800)
+    win.show()
     sys.exit(app.exec_())
 
-
-if __name__ == "__main__":
+if __name__=="__main__":
     main()
