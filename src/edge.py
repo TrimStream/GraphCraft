@@ -1,4 +1,3 @@
-# edge.py
 from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsItem
 from PyQt5.QtGui import QPainterPath, QPen, QColor, QPolygonF, QPainterPathStroker
 from PyQt5.QtCore import QPointF, Qt

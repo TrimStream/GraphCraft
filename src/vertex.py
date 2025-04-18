@@ -1,4 +1,3 @@
-# vertex.py
 from PyQt5.QtWidgets import (
     QGraphicsEllipseItem, QGraphicsTextItem, QGraphicsDropShadowEffect
 )
