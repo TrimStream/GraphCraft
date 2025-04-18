@@ -111,12 +111,18 @@ class GraphWindow(QMainWindow):
         for item in list(self.scene.selectedItems()):
             if isinstance(item, Vertex):
                 # remove its edges
-                for e in [e for e in self.scene.edges
-                          if e.vertex1 is item or e.vertex2 is item]:
+                incident_edges = [e for e in self.scene.edges if e.vertex1 == item or e.vertex2 == item]
+                for e in incident_edges:
                     self.scene.removeItem(e)
-                    self.scene.edges.remove(e)
+                self.scene.edges = [e for e in self.scene.edges if e.vertex1 != item and e.vertex2 != item]
+
                 self.scene.removeItem(item)
-                self.scene.vertices.remove(item)
+                if item in self.scene.vertices:
+                    self.scene.vertices.remove(item)
+
+                # Reset edge_source if the deleted vertex was selected
+                if self.scene.edge_source == item:
+                    self.scene.edge_source = None
         self.statusBar().showMessage(self._status_text())
 
     def delete_edge(self):
