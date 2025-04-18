@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
     QLabel, QDialog, QVBoxLayout, QTextEdit, QMessageBox
 )
 from PyQt5.QtCore import QTimer, QEvent
-from PyQt5.QtGui import QPainter, QFont
+from PyQt5.QtGui import QPainter
 from graphscene import GraphScene
 from vertex import Vertex
 from edge import Edge
@@ -16,7 +16,6 @@ class GraphWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("GraphCraft")
 
-        # Scene & View
         self.scene = GraphScene()
         self.view = QGraphicsView(self.scene)
         self.setCentralWidget(self.view)
@@ -24,38 +23,38 @@ class GraphWindow(QMainWindow):
         self.setStyleSheet("background-color: #333333;")
         self.view.setStyleSheet("background-color: #222222; border: none;")
 
-        # Status bar
         self.statusBar().showMessage(self._status_text())
-        self.statusBar().setStyleSheet(
-            "QStatusBar { color: white; background-color: #333333; }"
-        )
+        self.statusBar().setStyleSheet("color: white; background-color: #333333;")
 
-        # Toolbar
         toolbar = QToolBar("Main Toolbar")
         toolbar.setStyleSheet("background-color: #444444; color: white;")
         self.addToolBar(toolbar)
 
-        # Delete vertex
-        act = QAction("Delete Vertex", self)
-        act.triggered.connect(self.delete_vertex)
-        toolbar.addAction(act)
+        self._setup_toolbar(toolbar)
 
-        # Delete edge
-        act = QAction("Delete Edge", self)
-        act.triggered.connect(self.delete_edge)
-        toolbar.addAction(act)
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_simulation)
+        self.timer.start(30)
+        self.scene.installEventFilter(self)
 
-        # Cartesian product G × K₂
-        act = QAction("Cartesian Product", self)
-        act.triggered.connect(self.cartesian_product)
-        toolbar.addAction(act)
+    def _setup_toolbar(self, toolbar):
+        actions = [
+            ("Delete Vertex", self.delete_vertex),
+            ("Delete Edge", self.delete_edge),
+            ("Clear Scene", self.clear_scene),
+            ("Pretty Layout", self.pretty_layout),
+            ("Cartesian Product", self.cartesian_product),
+            ("Chromatic Polynomial", self.show_chromatic_polynomial),
+            ("Run Dijkstra", self.run_dijkstra),
+            ("Find MST", self.find_mst),
+            ("Find Max Flow", self.find_max_flow),
+        ]
 
-        # Chromatic polynomial
-        act = QAction("Chromatic Polynomial", self)
-        act.triggered.connect(self.show_chromatic_polynomial)
-        toolbar.addAction(act)
+        for name, func in actions:
+            act = QAction(name, self)
+            act.triggered.connect(func)
+            toolbar.addAction(act)
 
-        # Directed toggle
         self.directed_mode = False
         self.dir_label = QLabel("Directed: OFF")
         self.dir_label.setStyleSheet("color:white; margin-right:8px;")
@@ -64,7 +63,6 @@ class GraphWindow(QMainWindow):
         act.triggered.connect(self.toggle_directed_mode)
         toolbar.addAction(act)
 
-        # Physics toggle
         self.physics_enabled = True
         self.phys_label = QLabel("Physics: ON")
         self.phys_label.setStyleSheet("color:white; margin-right:8px;")
@@ -73,36 +71,25 @@ class GraphWindow(QMainWindow):
         act.triggered.connect(self.toggle_physics)
         toolbar.addAction(act)
 
-        # Show degrees
         self.deg_act = QAction("Show Degrees", self, checkable=True)
         self.deg_act.triggered.connect(self.toggle_degrees)
         toolbar.addAction(self.deg_act)
 
-        # Highlight bridges
         self.br_act = QAction("Highlight Bridges", self, checkable=True)
         self.br_act.triggered.connect(self.toggle_bridges)
         toolbar.addAction(self.br_act)
 
-        # Show components
         self.comp_act = QAction("Show Components", self, checkable=True)
         self.comp_act.triggered.connect(self.toggle_components)
         toolbar.addAction(self.comp_act)
 
-        # Show bipartite
         self.bip_act = QAction("Show Bipartite", self, checkable=True)
         self.bip_act.triggered.connect(self.toggle_bipartite)
         toolbar.addAction(self.bip_act)
 
-        # Analyze graph
         act = QAction("Analyze Graph", self)
         act.triggered.connect(self.analyze_graph)
         toolbar.addAction(act)
-
-        # Timer for physics & edge updates
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_simulation)
-        self.timer.start(30)
-        self.scene.installEventFilter(self)
 
     def _status_text(self):
         return f"Vertices: {len(self.scene.vertices)} | Edges: {len(self.scene.edges)}"
@@ -110,17 +97,11 @@ class GraphWindow(QMainWindow):
     def delete_vertex(self):
         for item in list(self.scene.selectedItems()):
             if isinstance(item, Vertex):
-                # remove its edges
-                incident_edges = [e for e in self.scene.edges if e.vertex1 == item or e.vertex2 == item]
-                for e in incident_edges:
+                for e in [e for e in self.scene.edges if e.vertex1 == item or e.vertex2 == item]:
                     self.scene.removeItem(e)
                 self.scene.edges = [e for e in self.scene.edges if e.vertex1 != item and e.vertex2 != item]
-
                 self.scene.removeItem(item)
-                if item in self.scene.vertices:
-                    self.scene.vertices.remove(item)
-
-                # Reset edge_source if the deleted vertex was selected
+                self.scene.vertices.remove(item)
                 if self.scene.edge_source == item:
                     self.scene.edge_source = None
         self.statusBar().showMessage(self._status_text())
@@ -132,13 +113,30 @@ class GraphWindow(QMainWindow):
                 self.scene.edges.remove(item)
         self.statusBar().showMessage(self._status_text())
 
+    def clear_scene(self):
+        self.scene.clear_scene()
+        self.statusBar().showMessage(self._status_text())
+
+    def pretty_layout(self):
+        self.scene.pretty_layout()
+
     def cartesian_product(self):
         self.scene.cartesian_product()
         self.statusBar().showMessage(self._status_text())
 
     def show_chromatic_polynomial(self):
         poly = self.scene.chromatic_polynomial()
-        QMessageBox.information(self, "Chromatic Polynomial", str(poly))
+        text = "\n".join([f"{k} colors: {v} valid colorings" for k, v in poly.items()])
+        QMessageBox.information(self, "Chromatic Polynomial", text)
+
+    def run_dijkstra(self):
+        self.scene.run_dijkstra()
+
+    def find_mst(self):
+        self.scene.find_mst()
+
+    def find_max_flow(self):
+        self.scene.find_max_flow()
 
     def toggle_directed_mode(self):
         self.directed_mode = not self.directed_mode
@@ -184,7 +182,8 @@ class GraphWindow(QMainWindow):
         self.statusBar().showMessage(self._status_text())
 
     def analyze_graph(self):
-        info = ga.get_graph_info(self.scene)
+        G = ga.build_graph(self.scene)
+        info = ga.get_graph_info(G)
         text = ga.format_info(info)
 
         dlg = QDialog(self)
@@ -195,8 +194,10 @@ class GraphWindow(QMainWindow):
         te = QTextEdit(dlg)
         te.setReadOnly(True)
         te.setPlainText(text)
+        te.setStyleSheet("background-color: #222222; color: white; font-family: Consolas; font-size: 12pt;")
         layout.addWidget(te)
 
+        dlg.setStyleSheet("background-color: #333333;")
         dlg.exec_()
 
     def eventFilter(self, source, event):
@@ -211,5 +212,5 @@ def main():
     w.show()
     sys.exit(app.exec_())
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()

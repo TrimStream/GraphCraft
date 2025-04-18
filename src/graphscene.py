@@ -1,12 +1,12 @@
-# graphscene.py
 from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QGraphicsScene
+from PyQt5.QtWidgets import QGraphicsScene, QColorDialog, QMessageBox, QInputDialog
 from PyQt5.QtCore import Qt, QPointF
 from vertex import Vertex
 from edge import Edge
 import math
 import networkx as nx
 import graph_analysis as ga
+import itertools
 
 class GraphScene(QGraphicsScene):
     def __init__(self, parent=None):
@@ -29,11 +29,11 @@ class GraphScene(QGraphicsScene):
         return e
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            items = self.items(event.scenePos())
-            v_click = next((i for i in items if isinstance(i, Vertex)), None)
-            e_click = next((i for i in items if isinstance(i, Edge)), None)
+        items = self.items(event.scenePos())
+        v_click = next((i for i in items if isinstance(i, Vertex)), None)
+        e_click = next((i for i in items if isinstance(i, Edge)), None)
 
+        if event.button() == Qt.LeftButton:
             if v_click:
                 if not self.edge_source:
                     self.edge_source = v_click
@@ -47,40 +47,42 @@ class GraphScene(QGraphicsScene):
                 self.edge_source = None
                 self.add_vertex(event.scenePos().x(), event.scenePos().y())
 
+        elif event.button() == Qt.RightButton:
+            if v_click or e_click:
+                color = QColorDialog.getColor()
+                if color.isValid():
+                    if v_click:
+                        v_click.set_color(color)
+                    elif e_click:
+                        e_click.set_color(color)
+
         super().mousePressEvent(event)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Delete:
-            deleted_anything = False
-
-            for itm in list(self.selectedItems()):
-                if isinstance(itm, Vertex):
-                    # Remove incident edges
-                    incident_edges = [e for e in self.edges if e.vertex1 == itm or e.vertex2 == itm]
-                    for e in incident_edges:
-                        self.removeItem(e)
-                    self.edges = [e for e in self.edges if e.vertex1 != itm and e.vertex2 != itm]
-
-                    # Remove the vertex
-                    self.removeItem(itm)
-                    if itm in self.vertices:
-                        self.vertices.remove(itm)
-
-                    deleted_anything = True
-
-                elif isinstance(itm, Edge):
-                    self.removeItem(itm)
-                    if itm in self.edges:
-                        self.edges.remove(itm)
-                    deleted_anything = True
-
+            for item in list(self.selectedItems()):
+                if isinstance(item, Vertex):
+                    for e in list(self.edges):
+                        if e.vertex1 == item or e.vertex2 == item:
+                            self.removeItem(e)
+                            self.edges.remove(e)
+                    self.removeItem(item)
+                    self.vertices.remove(item)
+                elif isinstance(item, Edge):
+                    self.removeItem(item)
+                    self.edges.remove(item)
             self.edge_source = None
-
-            if deleted_anything:
-                self.update()
-
         else:
             super().keyPressEvent(event)
+
+    def clear_scene(self):
+        for e in self.edges:
+            self.removeItem(e)
+        for v in self.vertices:
+            self.removeItem(v)
+        self.vertices.clear()
+        self.edges.clear()
+        self.edge_source = None
 
     def update_edges(self):
         for e in self.edges:
@@ -88,7 +90,6 @@ class GraphScene(QGraphicsScene):
 
     def update_physics(self, dt):
         rest, kr, ka, damp = 100.0, 10000.0, 0.5, 0.9
-
         for v in self.vertices:
             v.force = QPointF(0, 0)
 
@@ -136,31 +137,20 @@ class GraphScene(QGraphicsScene):
     def highlight_bridges(self):
         try:
             G = ga.build_graph(self)
-            simpleG = nx.Graph()
-            simpleG.add_nodes_from(G.nodes())
-            for u, v in G.edges():
-                if not simpleG.has_edge(u, v):
-                    simpleG.add_edge(u, v)
-
+            simpleG = nx.Graph(G)
             bridges = {tuple(sorted(b)) for b in nx.bridges(simpleG)}
-
             for e in self.edges:
                 key = tuple(sorted((id(e.vertex1), id(e.vertex2))))
-                pen = e.pen()
                 if key in bridges:
-                    pen.setColor(QColor('red'))
+                    e.set_temp_color(QColor('red'))
                 else:
-                    pen.setColor(QColor('black'))
-                e.setPen(pen)
-
+                    e.reset_temp_color()
         except Exception as e:
             print("Error during bridge highlighting:", e)
 
     def clear_edge_highlights(self):
         for e in self.edges:
-            pen = e.pen()
-            pen.setColor(QColor('black'))
-            e.setPen(pen)
+            e.reset_temp_color()
 
     def color_by_component(self):
         adj = {v: [] for v in self.vertices}
@@ -170,7 +160,6 @@ class GraphScene(QGraphicsScene):
 
         visited = set()
         components = []
-
         for v in self.vertices:
             if v not in visited:
                 queue = [v]
@@ -186,15 +175,14 @@ class GraphScene(QGraphicsScene):
                 components.append(comp)
 
         palette = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4']
-
         for idx, comp in enumerate(components):
             color = QColor(palette[idx % len(palette)])
             for v in comp:
-                v.set_color(color)
+                v.set_temp_color(color)
 
     def reset_vertex_colors(self):
         for v in self.vertices:
-            v.reset_color()
+            v.reset_temp_color()
 
     def color_by_bipartite(self):
         adj = {v: [] for v in self.vertices}
@@ -216,37 +204,76 @@ class GraphScene(QGraphicsScene):
                         queue.append(nbr)
                     elif color[nbr] == color[u]:
                         return False
-
         for v, side in color.items():
-            v.set_color(QColor('#aaffc3') if side == 0 else QColor('#ffd8b1'))
+            v.set_temp_color(QColor('#aaffc3') if side == 0 else QColor('#ffd8b1'))
         return True
 
-    def cartesian_product(self):
+    def pretty_layout(self):
         G = ga.build_graph(self)
-        H = nx.complete_graph(2)
-        P = nx.cartesian_product(G, H)
-        orig = {id(v): v.pos() for v in self.vertices}
+        pos = nx.spring_layout(G)
+        id_to_vertex = {id(v): v for v in self.vertices}
+        for node_id, (x, y) in pos.items():
+            if node_id in id_to_vertex:
+                id_to_vertex[node_id].setPos(x * 500, y * 500)
 
-        for e in list(self.edges):
-            self.removeItem(e)
-            self.edges.remove(e)
-        for v in list(self.vertices):
-            self.removeItem(v)
-            self.vertices.remove(v)
+    def run_dijkstra(self):
+        if len(self.vertices) < 2:
+            QMessageBox.warning(None, "Error", "Need at least 2 vertices.")
+            return
+        ids = [str(i) for i in range(len(self.vertices))]
+        i, ok1 = QInputDialog.getItem(None, "Source Vertex", "Select source vertex:", ids, 0, False)
+        if not ok1:
+            return
+        j, ok2 = QInputDialog.getItem(None, "Target Vertex", "Select target vertex:", ids, 0, False)
+        if not ok2:
+            return
+        source = self.vertices[int(i)]
+        target = self.vertices[int(j)]
 
-        self.edge_source = None
-        self.vertex_map = {}
-        dx = 200
-        for (u, i) in P.nodes():
-            pos = orig.get(u, QPointF(0, 0)) + QPointF(i * dx, 0)
-            nv = self.add_vertex(pos.x(), pos.y())
-            self.vertex_map[(u, i)] = nv
+        G = ga.build_graph(self)
+        try:
+            length = nx.shortest_path_length(G, id(source), id(target))
+            QMessageBox.information(None, "Dijkstra Result", f"Shortest path length: {length}")
+        except:
+            QMessageBox.warning(None, "Error", "No path exists between the selected vertices.")
 
-        for u1, u2 in P.edges():
-            self.add_edge(self.vertex_map[u1], self.vertex_map[u2])
+    def find_mst(self):
+        G = ga.build_graph(self)
+        simpleG = nx.Graph(G)
+        try:
+            T = nx.minimum_spanning_tree(simpleG)
+            total_weight = T.size(weight=None)
+            QMessageBox.information(None, "MST Result", f"Total MST weight: {total_weight}")
+        except:
+            QMessageBox.warning(None, "Error", "Cannot compute MST for disconnected graph.")
+
+    def find_max_flow(self):
+        if len(self.vertices) < 2:
+            QMessageBox.warning(None, "Error", "Need at least 2 vertices.")
+            return
+        ids = [str(i) for i in range(len(self.vertices))]
+        i, ok1 = QInputDialog.getItem(None, "Source Vertex", "Select source vertex:", ids, 0, False)
+        if not ok1:
+            return
+        j, ok2 = QInputDialog.getItem(None, "Sink Vertex", "Select sink vertex:", ids, 0, False)
+        if not ok2:
+            return
+        source = self.vertices[int(i)]
+        sink = self.vertices[int(j)]
+
+        G = nx.DiGraph()
+        for e in self.edges:
+            u = id(e.vertex1)
+            v = id(e.vertex2)
+            G.add_edge(u, v, capacity=1)
+
+        try:
+            flow_value, _ = nx.maximum_flow(G, id(source), id(sink))
+            QMessageBox.information(None, "Max Flow Result", f"Maximum flow value: {flow_value}")
+        except Exception as e:
+            QMessageBox.warning(None, "Error", f"Cannot compute max flow.\n{str(e)}")
 
     def chromatic_polynomial(self):
-        import itertools
         nodes = [id(v) for v in self.vertices]
         adj = {u: set() for u in nodes}
         for e in self.edges:
@@ -269,3 +296,29 @@ class GraphScene(QGraphicsScene):
                     count += 1
             poly[k] = count
         return poly
+
+    def cartesian_product(self):
+        G = ga.build_graph(self)
+        H = nx.complete_graph(2)
+        P = nx.cartesian_product(G, H)
+
+        id_to_pos = {id(v): v.pos() for v in self.vertices}
+
+        for e in list(self.edges):
+            self.removeItem(e)
+            self.edges.remove(e)
+        for v in list(self.vertices):
+            self.removeItem(v)
+            self.vertices.remove(v)
+
+        self.edge_source = None
+        self.vertex_map = {}
+
+        dx = 200
+        for (u, i) in P.nodes():
+            pos = id_to_pos.get(u, QPointF(0, 0)) + QPointF(i * dx, 0)
+            nv = self.add_vertex(pos.x(), pos.y())
+            self.vertex_map[(u, i)] = nv
+
+        for u1, u2 in P.edges():
+            self.add_edge(self.vertex_map[u1], self.vertex_map[u2])
